@@ -1,0 +1,57 @@
+body {
+    font-size: .875rem;
+    background-color: #f8f9fa;
+}
+
+.navbar {
+    padding: .5rem 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,.1);
+}
+
+.navbar-brand {
+    padding-top: .75rem;
+    padding-bottom: .75rem;
+    font-weight: bold;
+}
+
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    transition: all 0.3s ease;
+    border: none;
+    border-radius: 10px;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    background-color: transparent;
+    border-bottom: 1px solid rgba(0,0,0,.125);
+}
+
+.bi {
+    margin-right: 0.5rem;
+}
+
+.list-group-item {
+    border: none;
+    margin-bottom: 0.5rem;
+    border-radius: 5px !important;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+}
+
+.btn {
+    border-radius: 5px;
+    padding: .375rem 1rem;
+}
+
+.display-6 {
+    font-size: 2.5rem;
+    font-weight: 300;
+    line-height: 1.2;
+}

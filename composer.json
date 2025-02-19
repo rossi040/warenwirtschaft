@@ -1,0 +1,14 @@
+{
+    "name": "rechnungsverwaltung/app",
+    "description": "Rechnungsverwaltung",
+    "type": "project",
+    "require": {
+        "tecnickcom/tcpdf": "^6.8"
+    },
+    "authors": [
+        {
+            "name": "Ihr Name",
+            "email": "ihre@email.com"
+        }
+    ]
+}
