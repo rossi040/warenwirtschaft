@@ -155,11 +155,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                           rows="3"><?php echo htmlspecialchars($article['detailed_description']); ?></textarea>
                             </div>
                             <div class="col-md-6">
-                                <label for="manufacturer_id" class="form-label">Hersteller ID</label>
-                                <input type="number" class="form-control" id="manufacturer_id" name="manufacturer_id"
-                                       value="<?php echo htmlspecialchars($article['manufacturer_id']); ?>">
-                            </div>
-                        </div>
+    									<label for="manufacturer_id" class="form-label">Hersteller</label>
+    									<select class="form-control" id="manufacturer_id" name="manufacturer_id">
+        									<option value="">Bitte wählen...</option>
+       							 <?php
+        									// Alle Hersteller aus der Datenbank laden
+        								$stmt = $pdo->query("SELECT id, company_name FROM manufacturers ORDER BY company_name");
+        								while ($manufacturer = $stmt->fetch()) {
+           							 $selected = ($manufacturer['id'] == $article['manufacturer_id']) ? 'selected' : '';
+           							echo '<option value="' . htmlspecialchars($manufacturer['id']) . '" ' . $selected . '>';
+            						echo htmlspecialchars($manufacturer['company_name']);
+            						echo '</option>';
+        									}
+      									  ?>
+   										 </select>
+									</div>
 
                         <div class="row mb-3">
                             <div class="col-md-6">
