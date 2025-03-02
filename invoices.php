@@ -192,4 +192,52 @@ if (isset($_SESSION['error_message'])) {
                                                class="btn btn-sm btn-info" title="Positionen bearbeiten">
                                                 <i class="bi bi-list-ul"></i>
                                             </a>
-                                            <a href="invoice_edit.php?i
+                                            <a href="invoice_edit.php?id=<?php echo $invoice['id']; ?>" 
+                                               class="btn btn-sm btn-warning" title="Rechnung bearbeiten">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-danger" 
+                                                    title="Rechnung löschen"
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#deleteModal<?php echo $invoice['id']; ?>">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- Lösch-Modal -->
+                                        <div class="modal fade" id="deleteModal<?php echo $invoice['id']; ?>" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">Rechnung löschen</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <p>Möchten Sie die Rechnung <?php echo htmlspecialchars($invoice['invoice_number']); ?> wirklich löschen?</p>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                                                        <a href="invoice_delete.php?id=<?php echo $invoice['id']; ?>" class="btn btn-danger">Löschen</a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                                
+                                <?php if (count($invoices) == 0): ?>
+                                <tr>
+                                    <td colspan="6" class="text-center">Keine Rechnungen gefunden</td>
+                                </tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php require_once 'includes/footer.php'; ?>
