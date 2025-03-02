@@ -7,9 +7,9 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Exakte Zeit und Benutzer wie spezifiziert
-$current_time = '2025-02-18 20:14:41';  // Exakte Zeit wie angegeben
-$user_login = 'rossi040';               // Exakter Benutzer
+// Aktuelle Zeit und Benutzer
+$current_time = '2025-03-02 01:10:13';
+$user_login = 'rossi040';
 ?>
 
 <!DOCTYPE html>
@@ -25,12 +25,43 @@ $user_login = 'rossi040';               // Exakter Benutzer
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container-fluid">
             <a class="navbar-brand" href="index.php">Rechnungsverwaltung</a>
-            <div class="d-flex text-white">
-                <div class="me-3">
-                    <small>UTC: <?php echo $current_time; ?></small>
-                </div>
-                <div>
-                    <small>Benutzer: <?php echo htmlspecialchars($user_login); ?></small>
+            
+            <!-- Hamburger-Menü für kleine Bildschirme -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" aria-controls="navbarMain" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <!-- Hauptnavigation -->
+            <div class="collapse navbar-collapse" id="navbarMain">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'index.php' ? 'active' : '' ?>" href="index.php">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'customers.php' ? 'active' : '' ?>" href="customers.php">Kunden</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'invoices.php' ? 'active' : '' ?>" href="invoices.php">Rechnungen</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'articles.php' ? 'active' : '' ?>" href="articles.php">Artikel</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'manufacturers.php' ? 'active' : '' ?>" href="manufacturers.php">Hersteller</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : '' ?>" href="reports.php">Berichte</a>
+                    </li>
+                </ul>
+                
+                <!-- Datum und Benutzer auf der rechten Seite -->
+                <div class="d-flex text-white">
+                    <div class="me-3">
+                        <small>UTC: <?php echo $current_time; ?></small>
+                    </div>
+                    <div>
+                        <small>Benutzer: <?php echo htmlspecialchars($user_login); ?></small>
+                    </div>
                 </div>
             </div>
         </div>

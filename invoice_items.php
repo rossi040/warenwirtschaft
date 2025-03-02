@@ -12,6 +12,77 @@ $invoice_id = $_GET['id'];
 $errors = [];
 $success_message = '';
 
+// Formularverarbeitung
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['action'])) {
+        if ($_POST['action'] === 'add_item' && isset($_POST['article_id']) && isset($_POST['quantity']) && isset($_POST['price_per_unit'])) {
+            try {
+                $article_id = $_POST['article_id'];
+                $quantity = (float)$_POST['quantity'];
+                $price_per_unit = (float)$_POST['price_per_unit'];
+                $total_price = $quantity * $price_per_unit;
+                
+                // Position hinzufügen
+                $stmt = $pdo->prepare("
+                    INSERT INTO invoice_items (invoice_id, article_id, quantity, price_per_unit, total_price) 
+                    VALUES (?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([$invoice_id, $article_id, $quantity, $price_per_unit, $total_price]);
+                
+                // Gesamtsummen neu berechnen
+                recalculateTotals($pdo, $invoice_id);
+                
+                $success_message = 'Position wurde hinzugefügt.';
+            } catch (PDOException $e) {
+                $errors[] = 'Fehler beim Hinzufügen der Position: ' . $e->getMessage();
+            }
+        } elseif ($_POST['action'] === 'delete_item' && isset($_POST['item_id'])) {
+            try {
+                // Position löschen
+                $stmt = $pdo->prepare("DELETE FROM invoice_items WHERE id = ? AND invoice_id = ?");
+                $stmt->execute([$_POST['item_id'], $invoice_id]);
+                
+                // Gesamtsummen neu berechnen
+                recalculateTotals($pdo, $invoice_id);
+                
+                $success_message = 'Position wurde gelöscht.';
+            } catch (PDOException $e) {
+                $errors[] = 'Fehler beim Löschen der Position: ' . $e->getMessage();
+            }
+        }
+    }
+}
+
+// Funktion zum Neuberechnen der Gesamtsummen
+function recalculateTotals($pdo, $invoice_id) {
+    try {
+        // Gesamtsumme der Positionen berechnen
+        $stmt = $pdo->prepare("SELECT SUM(total_price) as subtotal FROM invoice_items WHERE invoice_id = ?");
+        $stmt->execute([$invoice_id]);
+        $result = $stmt->fetch();
+        $subtotal = $result['subtotal'] ?? 0;
+        
+        // MwSt-Satz und -Betrag berechnen
+        $stmt = $pdo->prepare("SELECT vat_rate FROM invoices WHERE id = ?");
+        $stmt->execute([$invoice_id]);
+        $result = $stmt->fetch();
+        $vat_rate = $result['vat_rate'] ?? 19;
+        $vat_amount = $subtotal * ($vat_rate / 100);
+        $total_amount = $subtotal + $vat_amount;
+        
+        // Rechnung aktualisieren
+        $stmt = $pdo->prepare("
+            UPDATE invoices 
+            SET subtotal = ?, vat_amount = ?, total_amount = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$subtotal, $vat_amount, $total_amount, $invoice_id]);
+    } catch (PDOException $e) {
+        // Fehler protokollieren
+        error_log("Fehler bei Neuberechnung der Rechnungssummen: " . $e->getMessage());
+    }
+}
+
 // Rechnung laden
 try {
     $stmt = $pdo->prepare("SELECT * FROM invoices WHERE id = ?");
@@ -28,6 +99,7 @@ try {
         FROM invoice_items i 
         LEFT JOIN articles a ON i.article_id = a.id 
         WHERE i.invoice_id = ?
+        ORDER BY i.id
     ");
     $stmt->execute([$invoice_id]);
     $invoice_items = $stmt->fetchAll();
@@ -51,26 +123,23 @@ try {
                     Rechnungspositionen
                 </h1>
                 <div>
-                    <a href="invoices.php" class="btn btn-secondary me-2">
-                        <i class="bi bi-arrow-left"></i> Zurück
+                    <a href="invoice_edit.php?id=<?php echo $invoice_id; ?>" class="btn btn-secondary me-2">
+                        <i class="bi bi-arrow-left"></i> Rechnung bearbeiten
                     </a>
-                    <button type="button" class="btn btn-success me-2" id="saveButton">
-                        <i class="bi bi-save"></i> Speichern
-                    </button>
+                    <a href="invoices.php" class="btn btn-secondary me-2">
+                        <i class="bi bi-list"></i> Alle Rechnungen
+                    </a>
                     <a href="invoice_pdf.php?id=<?php echo $invoice_id; ?>" class="btn btn-primary" target="_blank">
                         <i class="bi bi-file-pdf"></i> PDF
                     </a>
                 </div>
             </div>
 
-            <!-- Erfolgsmeldung Container -->
-            <div id="successAlert" class="alert alert-success" style="display: none;">
-                Die Positionen wurden erfolgreich gespeichert.
-            </div>
-
-            <!-- Fehlermeldung Container -->
-            <div id="errorAlert" class="alert alert-danger" style="display: none;">
-            </div>
+            <?php if ($success_message): ?>
+                <div class="alert alert-success">
+                    <?php echo htmlspecialchars($success_message); ?>
+                </div>
+            <?php endif; ?>
 
             <?php if (!empty($errors)): ?>
                 <div class="alert alert-danger">
@@ -127,10 +196,10 @@ try {
                 </div>
             </div>
 
-            <!-- Weitere Rechnungspositionen -->
+            <!-- Rechnungspositionen -->
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Weitere Rechnungspositionen</h5>
+                    <h5 class="card-title mb-0">Rechnungspositionen</h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
@@ -218,76 +287,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedOption = articleSelect.options[articleSelect.selectedIndex];
         priceInput.value = selectedOption.getAttribute('data-price');
     }
-
-    // Speichern-Button Event Handler
-    document.getElementById('saveButton').addEventListener('click', function() {
-        const button = this;
-        const originalText = button.innerHTML;
-        button.disabled = true;
-        button.innerHTML = '<i class="bi bi-hourglass"></i> Speichern...';
-
-        // Positionen sammeln
-        const positions = [];
-        document.querySelectorAll('#itemsTable tbody tr').forEach(row => {
-            // Überprüfen ob es eine echte Datenzeile ist (nicht die "Keine Positionen" Zeile)
-            if (row.cells.length >= 4) {
-                const position = {
-                    article_id: row.querySelector('input[name="item_id"]')?.value,
-                    quantity: parseFloat(row.cells[1].textContent),
-                    price_per_unit: parseFloat(row.cells[2].textContent.replace(',', '.'))
-                };
-                if (position.article_id) {
-                    positions.push(position);
-                }
-            }
-        });
-
-        // AJAX Request zum Speichern
-        fetch('save_items.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                invoice_id: <?php echo $invoice_id; ?>,
-                positions: positions
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Erfolgsmeldung zeigen
-                const successAlert = document.getElementById('successAlert');
-                successAlert.style.display = 'block';
-                successAlert.innerHTML = '<i class="bi bi-check-circle"></i> ' + data.message;
-                
-                // Nach 3 Sekunden ausblenden
-                setTimeout(() => {
-                    successAlert.style.display = 'none';
-                }, 3000);
-
-                // Optional: Seite neu laden um aktualisierte Daten zu zeigen
-                // window.location.reload();
-            } else {
-                // Fehlermeldung zeigen
-                const errorAlert = document.getElementById('errorAlert');
-                errorAlert.style.display = 'block';
-                errorAlert.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + data.error;
-            }
-        })
-        .catch(error => {
-            // Fehlermeldung bei technischen Problemen
-            const errorAlert = document.getElementById('errorAlert');
-            errorAlert.style.display = 'block';
-            errorAlert.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Technischer Fehler beim Speichern';
-            console.error('Error:', error);
-        })
-        .finally(() => {
-            // Button wieder aktivieren
-            button.disabled = false;
-            button.innerHTML = originalText;
-        });
-    });
 });
 </script>
 

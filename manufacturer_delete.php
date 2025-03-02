@@ -7,29 +7,30 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// Prüfen ob eine ID übergeben wurde
-if (!isset($_GET['id'])) {
-    header('Location: manufacturers.php');
-    exit;
-}
+// Hersteller-ID aus der URL abrufen
+$id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
-try {
-    // Prüfen ob der Hersteller noch mit Artikeln verknüpft ist
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM articles WHERE manufacturer_id = ?");
-    $stmt->execute([$_GET['id']]);
-    $count = $stmt->fetchColumn();
-
-    if ($count > 0) {
-        $_SESSION['error_message'] = 'Der Hersteller kann nicht gelöscht werden, da noch Artikel damit verknüpft sind.';
-    } else {
-        // Hersteller löschen
-        $stmt = $pdo->prepare("DELETE FROM manufacturers WHERE id = ?");
-        $stmt->execute([$_GET['id']]);
-        $_SESSION['success_message'] = 'Hersteller wurde erfolgreich gelöscht.';
+if ($id > 0) {
+    try {
+        // Prüfen, ob der Hersteller existiert
+        $checkStmt = $pdo->prepare("SELECT id FROM manufacturers WHERE id = ?");
+        $checkStmt->execute([$id]);
+        
+        if ($checkStmt->rowCount() > 0) {
+            // Hersteller löschen
+            $deleteStmt = $pdo->prepare("DELETE FROM manufacturers WHERE id = ?");
+            $deleteStmt->execute([$id]);
+            
+            $_SESSION['success'] = "Hersteller wurde erfolgreich gelöscht.";
+        } else {
+            $_SESSION['error'] = "Hersteller nicht gefunden.";
+        }
+    } catch (PDOException $e) {
+        $_SESSION['error'] = "Fehler beim Löschen des Herstellers: " . $e->getMessage();
     }
-} catch (PDOException $e) {
-    $_SESSION['error_message'] = 'Fehler beim Löschen des Herstellers.';
 }
 
+// Zurück zur Herstellerübersicht
 header('Location: manufacturers.php');
 exit;
+?>

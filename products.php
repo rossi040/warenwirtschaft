@@ -8,21 +8,21 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Kunden aus der Datenbank abrufen
+// Artikel aus der Datenbank abrufen
 try {
-    $stmt = $pdo->query("SELECT * FROM customers ORDER BY company_name, last_name");
-    $customers = $stmt->fetchAll();
+    $stmt = $pdo->query("SELECT * FROM products ORDER BY name");
+    $products = $stmt->fetchAll();
 } catch (PDOException $e) {
-    $_SESSION['error'] = "Fehler beim Laden der Kunden: " . $e->getMessage();
-    $customers = [];
+    $_SESSION['error'] = "Fehler beim Laden der Artikel: " . $e->getMessage();
+    $products = [];
 }
 ?>
 
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2>Kunden</h2>
-        <a href="customer_edit.php" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Neuer Kunde
+        <h2>Artikel</h2>
+        <a href="product_edit.php" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Neuer Artikel
         </a>
     </div>
     
@@ -48,33 +48,31 @@ try {
                 <table class="table table-striped table-hover">
                     <thead>
                         <tr>
-                            <th>Firma</th>
-                            <th>Vorname</th>
-                            <th>Nachname</th>
-                            <th>E-Mail</th>
-                            <th>Telefon</th>
+                            <th>Name</th>
+                            <th>Beschreibung</th>
+                            <th>Preis</th>
+                            <th>Steuersatz</th>
                             <th>Aktionen</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if (empty($customers)): ?>
+                        <?php if (empty($products)): ?>
                         <tr>
-                            <td colspan="6" class="text-center">Keine Kunden gefunden</td>
+                            <td colspan="5" class="text-center">Keine Artikel gefunden</td>
                         </tr>
                         <?php else: ?>
-                            <?php foreach ($customers as $customer): ?>
+                            <?php foreach ($products as $product): ?>
                             <tr>
-                                <td><?= htmlspecialchars($customer['company_name']) ?></td>
-                                <td><?= htmlspecialchars($customer['first_name']) ?></td>
-                                <td><?= htmlspecialchars($customer['last_name']) ?></td>
-                                <td><?= htmlspecialchars($customer['email']) ?></td>
-                                <td><?= htmlspecialchars($customer['phone']) ?></td>
+                                <td><?= htmlspecialchars($product['name']) ?></td>
+                                <td><?= htmlspecialchars($product['description']) ?></td>
+                                <td><?= number_format($product['price'], 2, ',', '.') ?> €</td>
+                                <td><?= number_format($product['tax_rate'], 2, ',', '.') ?> %</td>
                                 <td>
-                                    <a href="customer_edit.php?id=<?= $customer['id'] ?>" class="btn btn-sm btn-primary">
+                                    <a href="product_edit.php?id=<?= $product['product_id'] ?>" class="btn btn-sm btn-primary">
                                         Bearbeiten
                                     </a>
-                                    <a href="customer_delete.php?id=<?= $customer['id'] ?>" class="btn btn-sm btn-danger"
-                                       onclick="return confirm('Sind Sie sicher, dass Sie diesen Kunden löschen möchten?')">
+                                    <a href="product_delete.php?id=<?= $product['product_id'] ?>" class="btn btn-sm btn-danger"
+                                       onclick="return confirm('Sind Sie sicher, dass Sie diesen Artikel löschen möchten?')">
                                         Löschen
                                     </a>
                                 </td>
