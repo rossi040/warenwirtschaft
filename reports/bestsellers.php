@@ -1,10 +1,11 @@
 <?php
-require_once '../includes/config.php';
-require_once '../includes/db.php';
-require_once '../includes/header.php';
+$base_path = ''; // Basis-Pfad aktualisiert
+require_once $_SERVER['DOCUMENT_ROOT'] . $base_path . '/includes/config.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . $base_path . '/includes/db.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . $base_path . '/includes/header.php';
 
 // Aktuelle System-Werte
-$current_utc = '2025-02-20 07:14:32';
+$current_utc = '2025-03-05 15:14:18';
 $current_user = 'rossi040';
 
 // SQL für meistverkaufte Artikel
@@ -72,15 +73,9 @@ try {
                                         <tr>
                                             <td><?php echo $index + 1; ?></td>
                                             <td><?php echo htmlspecialchars($article['article_name']); ?></td>
-                                            <td class="text-end">
-                                                <?php echo number_format($article['sale_count'], 0, ',', '.'); ?>
-                                            </td>
-                                            <td class="text-end">
-                                                <?php echo number_format($article['total_quantity'], 0, ',', '.'); ?>
-                                            </td>
-                                            <td class="text-end">
-                                                <?php echo number_format($article['total_revenue'], 2, ',', '.'); ?> €
-                                            </td>
+                                            <td class="text-end"><?php echo number_format($article['sale_count'], 0, ',', '.'); ?></td>
+                                            <td class="text-end"><?php echo number_format($article['total_quantity'], 0, ',', '.'); ?></td>
+                                            <td class="text-end"><?php echo number_format($article['total_revenue'], 2, ',', '.'); ?> €</td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -91,7 +86,7 @@ try {
 
                 <!-- Navigation -->
                 <div class="mt-3">
-                    <a href="../berichte.php" class="btn btn-secondary">
+                    <a href="<?php echo $base_path; ?>/berichte.php" class="btn btn-secondary">
                         <i class="bi bi-arrow-left"></i> Zurück zur Übersicht
                     </a>
                 </div>
@@ -100,4 +95,4 @@ try {
     </div>
 </div>
 
-<?php require_once '../includes/footer.php'; ?>
+<?php require_once $_SERVER['DOCUMENT_ROOT'] . $base_path . '/includes/footer.php'; ?>

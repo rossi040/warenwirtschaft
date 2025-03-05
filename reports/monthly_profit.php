@@ -1,10 +1,11 @@
 <?php
-require_once '../includes/config.php';
-require_once '../includes/db.php';
-require_once '../includes/header.php';
+$base_path = ''; // Basis-Pfad aktualisiert
+require_once $_SERVER['DOCUMENT_ROOT'] . $base_path . '/includes/config.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . $base_path . '/includes/db.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . $base_path . '/includes/header.php';
 
 // Aktuelle System-Werte
-$current_utc = '2025-02-20 07:14:32';
+$current_utc = '2025-03-05 15:24:38';
 $current_user = 'rossi040';
 
 // SQL für monatlichen Gewinn
@@ -51,58 +52,4 @@ try {
                 <!-- Gewinntabelle -->
                 <div class="card">
                     <div class="card-header bg-success text-white">
-                        <h5 class="card-title mb-0">Monatliche Gewinnübersicht</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-striped table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Monat</th>
-                                        <th class="text-end">Umsatz</th>
-                                        <th class="text-end">Kosten</th>
-                                        <th class="text-end">Gewinn</th>
-                                        <th class="text-end">Marge</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($profits as $profit): ?>
-                                        <tr>
-                                            <td><?php echo htmlspecialchars($profit['month']); ?></td>
-                                            <td class="text-end">
-                                                <?php echo number_format($profit['revenue'], 2, ',', '.'); ?> €
-                                            </td>
-                                            <td class="text-end">
-                                                <?php echo number_format($profit['costs'], 2, ',', '.'); ?> €
-                                            </td>
-                                            <td class="text-end">
-                                                <?php echo number_format($profit['profit'], 2, ',', '.'); ?> €
-                                            </td>
-                                            <td class="text-end">
-                                                <?php 
-                                                $margin = ($profit['revenue'] > 0) 
-                                                    ? ($profit['profit'] / $profit['revenue'] * 100) 
-                                                    : 0;
-                                                echo number_format($margin, 1, ',', '.') . '%';
-                                                ?>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Navigation -->
-                <div class="mt-3">
-                    <a href="../berichte.php" class="btn btn-secondary">
-                        <i class="bi bi-arrow-left"></i> Zurück zur Übersicht
-                    </a>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div>
-</div>
-
-<?php require_once '../includes/footer.php'; ?>
+                        <h5 class="card-title mb-0">Monatliche Gewinn
