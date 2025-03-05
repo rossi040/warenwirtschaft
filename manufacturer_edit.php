@@ -1,6 +1,6 @@
 <?php
-require_once 'config.php';
-require_once 'header.php';
+require_once 'includes/config.php';
+require_once 'includes/header.php';
 
 // Sicherstellen, dass der Benutzer eingeloggt ist
 if (!isset($_SESSION['user_id'])) {
@@ -8,160 +8,215 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// Hersteller-ID aus der URL abrufen (für Bearbeitungen)
-$id = isset($_GET['id']) ? intval($_GET['id']) : 0;
-$manufacturer = [];
+// Debug-Ausgabe aktivieren
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-// Bei bestehenden Herstellern, Daten laden
-if ($id > 0) {
+$manufacturer = [
+    'id' => '',
+    'name' => '',
+    'address' => '',
+    'contact_person' => '',
+    'phone' => '',
+    'email' => '',
+    'notes' => '',
+    'active' => 1
+];
+
+$errors = [];
+$success_message = '';
+$is_new = true;
+
+// Hersteller laden, wenn eine ID übergeben wurde
+if (isset($_GET['id'])) {
     $stmt = $pdo->prepare("SELECT * FROM manufacturers WHERE id = ?");
-    $stmt->execute([$id]);
-    $manufacturer = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt->execute([$_GET['id']]);
+    $loaded_manufacturer = $stmt->fetch();
     
-    if (!$manufacturer) {
-        $_SESSION['error'] = "Hersteller nicht gefunden.";
-        header('Location: manufacturers.php');
-        exit;
+    if ($loaded_manufacturer) {
+        $manufacturer = array_merge($manufacturer, $loaded_manufacturer);
+        $is_new = false;
+    } else {
+        $errors[] = 'Der angegebene Hersteller wurde nicht gefunden.';
     }
 }
 
-// Formular verarbeiten
+// Formularverarbeitung
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $company_name = trim($_POST['company_name']);
-    $contact_person = trim($_POST['contact_person']);
-    $phone = trim($_POST['phone']);
-    $email = trim($_POST['email']);
-    $website = trim($_POST['website']);
-    $address = trim($_POST['address']);
-    $notes = trim($_POST['notes']);
-    
-    // Validierung
-    $errors = [];
-    if (empty($company_name)) {
-        $errors[] = "Firmenname ist erforderlich.";
-    }
-    
-    if (empty($errors)) {
-        try {
-            if ($id > 0) {
-                // Bestehenden Hersteller aktualisieren
-                $stmt = $pdo->prepare("
-                    UPDATE manufacturers SET 
-                    company_name = ?, 
-                    contact_person = ?, 
-                    phone = ?, 
-                    email = ?, 
-                    website = ?,
-                    address = ?,
-                    notes = ?
-                    WHERE id = ?
-                ");
-                $stmt->execute([
-                    $company_name, 
-                    $contact_person, 
-                    $phone, 
-                    $email, 
-                    $website,
-                    $address,
-                    $notes, 
-                    $id
-                ]);
-                $_SESSION['success'] = "Hersteller wurde erfolgreich aktualisiert.";
-            } else {
+    try {
+        // Daten aus dem Formular übernehmen
+        $manufacturer['name'] = trim($_POST['name'] ?? '');
+        $manufacturer['address'] = trim($_POST['address'] ?? '');
+        $manufacturer['contact_person'] = trim($_POST['contact_person'] ?? '');
+        $manufacturer['phone'] = trim($_POST['phone'] ?? '');
+        $manufacturer['email'] = trim($_POST['email'] ?? '');
+        $manufacturer['notes'] = trim($_POST['notes'] ?? '');
+        $manufacturer['active'] = isset($_POST['active']) ? 1 : 0;
+
+        // Validierung
+        if (empty($manufacturer['name'])) {
+            $errors[] = 'Bitte geben Sie einen Namen ein.';
+        }
+
+        // Wenn keine Fehler aufgetreten sind
+        if (empty($errors)) {
+            if ($is_new) {
                 // Neuen Hersteller erstellen
                 $stmt = $pdo->prepare("
-                    INSERT INTO manufacturers 
-                    (company_name, contact_person, phone, email, website, address, notes) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO manufacturers (name, address, contact_person, phone, email, notes, active, created_at, created_by) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?)
                 ");
+                
                 $stmt->execute([
-                    $company_name, 
-                    $contact_person, 
-                    $phone, 
-                    $email, 
-                    $website,
-                    $address,
-                    $notes
+                    $manufacturer['name'],
+                    $manufacturer['address'],
+                    $manufacturer['contact_person'],
+                    $manufacturer['phone'],
+                    $manufacturer['email'],
+                    $manufacturer['notes'],
+                    $manufacturer['active'],
+                    $_SESSION['user_id']
                 ]);
-                $_SESSION['success'] = "Hersteller wurde erfolgreich erstellt.";
+                
+                $success_message = 'Der Hersteller wurde erfolgreich angelegt.';
+            } else {
+                // Bestehenden Hersteller aktualisieren
+                $stmt = $pdo->prepare("
+                    UPDATE manufacturers 
+                    SET 
+                        name = ?,
+                        address = ?,
+                        contact_person = ?,
+                        phone = ?,
+                        email = ?,
+                        notes = ?,
+                        active = ?,
+                        updated_at = NOW(),
+                        updated_by = ?
+                    WHERE id = ?
+                ");
+                
+                $stmt->execute([
+                    $manufacturer['name'],
+                    $manufacturer['address'],
+                    $manufacturer['contact_person'],
+                    $manufacturer['phone'],
+                    $manufacturer['email'],
+                    $manufacturer['notes'],
+                    $manufacturer['active'],
+                    $_SESSION['user_id'],
+                    $manufacturer['id']
+                ]);
+                
+                $success_message = 'Der Hersteller wurde erfolgreich aktualisiert.';
             }
             
-            header('Location: manufacturers.php');
+            // Nach erfolgreichem Speichern Weiterleitung zur Herstellerübersicht
+            $_SESSION['success_message'] = $success_message;
+            header("Location: manufacturers.php");
             exit;
-        } catch (PDOException $e) {
-            $errors[] = "Datenbankfehler: " . $e->getMessage();
+            
         }
+    } catch (PDOException $e) {
+        // Detaillierte Fehlermeldung ausgeben
+        $errors[] = 'Datenbankfehler: ' . $e->getMessage();
     }
 }
+
 ?>
 
-<!-- Änderung hier: container-fluid statt container -->
 <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2><?= $id > 0 ? 'Hersteller bearbeiten' : 'Neuer Hersteller' ?></h2>
-        <a href="manufacturers.php" class="btn btn-secondary">Zurück zur Übersicht</a>
-    </div>
-    
-    <?php if (!empty($errors)): ?>
-    <div class="alert alert-danger">
-        <ul class="mb-0">
-            <?php foreach ($errors as $error): ?>
-                <li><?= htmlspecialchars($error) ?></li>
-            <?php endforeach; ?>
-        </ul>
-    </div>
-    <?php endif; ?>
-    
-    <div class="card">
-        <div class="card-body">
-            <form method="post">
-                <div class="mb-3">
-                    <label for="company_name" class="form-label">Firmenname *</label>
-                    <input type="text" class="form-control" id="company_name" name="company_name" 
-                           value="<?= htmlspecialchars($manufacturer['company_name'] ?? '') ?>" required>
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="bi bi-building"></i>
+                    <?php echo $is_new ? 'Neuen Hersteller anlegen' : 'Hersteller bearbeiten'; ?>
+                </h1>
+                <a href="manufacturers.php" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Zurück zur Übersicht
+                </a>
+            </div>
+
+            <?php if (!empty($errors)): ?>
+                <div class="alert alert-danger">
+                    <ul class="mb-0">
+                        <?php foreach ($errors as $error): ?>
+                            <li><?php echo htmlspecialchars($error); ?></li>
+                        <?php endforeach; ?>
+                    </ul>
                 </div>
-                
-                <div class="mb-3">
-                    <label for="contact_person" class="form-label">Ansprechpartner</label>
-                    <input type="text" class="form-control" id="contact_person" name="contact_person" 
-                           value="<?= htmlspecialchars($manufacturer['contact_person'] ?? '') ?>">
+            <?php endif; ?>
+
+            <?php if ($success_message): ?>
+                <div class="alert alert-success">
+                    <?php echo htmlspecialchars($success_message); ?>
                 </div>
-                
-                <div class="mb-3">
-                    <label for="phone" class="form-label">Telefon</label>
-                    <input type="text" class="form-control" id="phone" name="phone" 
-                           value="<?= htmlspecialchars($manufacturer['phone'] ?? '') ?>">
+            <?php endif; ?>
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">Herstellerdaten</h5>
                 </div>
-                
-                <div class="mb-3">
-                    <label for="email" class="form-label">E-Mail</label>
-                    <input type="email" class="form-control" id="email" name="email" 
-                           value="<?= htmlspecialchars($manufacturer['email'] ?? '') ?>">
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="id" value="<?php echo htmlspecialchars($manufacturer['id'] ?? ''); ?>">
+                        
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name *</label>
+                            <input type="text" class="form-control" id="name" name="name"
+                                   value="<?php echo htmlspecialchars($manufacturer['name'] ?? ''); ?>" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="address" class="form-label">Adresse</label>
+                            <textarea class="form-control" id="address" name="address" rows="3"><?php echo htmlspecialchars($manufacturer['address'] ?? ''); ?></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="contact_person" class="form-label">Kontaktperson</label>
+                            <input type="text" class="form-control" id="contact_person" name="contact_person"
+                                   value="<?php echo htmlspecialchars($manufacturer['contact_person'] ?? ''); ?>">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="phone" class="form-label">Telefon</label>
+                            <input type="text" class="form-control" id="phone" name="phone"
+                                   value="<?php echo htmlspecialchars($manufacturer['phone'] ?? ''); ?>">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="email" class="form-label">E-Mail</label>
+                            <input type="email" class="form-control" id="email" name="email"
+                                   value="<?php echo htmlspecialchars($manufacturer['email'] ?? ''); ?>">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Anmerkungen</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="3"><?php echo htmlspecialchars($manufacturer['notes'] ?? ''); ?></textarea>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="active" name="active" value="1"
+                                   <?php echo !empty($manufacturer['active']) ? 'checked' : ''; ?>>
+                            <label class="form-check-label" for="active">
+                                Hersteller ist aktiv
+                            </label>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="manufacturers.php" class="btn btn-light border">
+                                <i class="bi bi-arrow-left"></i> Abbrechen
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Hersteller speichern
+                            </button>
+                        </div>
+                    </form>
                 </div>
-                
-                <div class="mb-3">
-                    <label for="website" class="form-label">Website</label>
-                    <input type="url" class="form-control" id="website" name="website" 
-                           value="<?= htmlspecialchars($manufacturer['website'] ?? '') ?>">
-                </div>
-                
-                <div class="mb-3">
-                    <label for="address" class="form-label">Adresse</label>
-                    <textarea class="form-control" id="address" name="address" rows="3"><?= htmlspecialchars($manufacturer['address'] ?? '') ?></textarea>
-                </div>
-                
-                <div class="mb-3">
-                    <label for="notes" class="form-label">Notizen</label>
-                    <textarea class="form-control" id="notes" name="notes" rows="3"><?= htmlspecialchars($manufacturer['notes'] ?? '') ?></textarea>
-                </div>
-                
-                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                    <button type="submit" class="btn btn-primary">Speichern</button>
-                    <a href="manufacturers.php" class="btn btn-outline-secondary">Abbrechen</a>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 </div>
 
-<?php require_once 'footer.php'; ?>
+<?php require_once 'includes/footer.php'; ?>

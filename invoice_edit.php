@@ -1,6 +1,6 @@
 <?php
-require_once 'config.php';
-require_once 'header.php';
+require_once 'includes/config.php';
+require_once 'includes/header.php';
 
 // Sicherstellen, dass der Benutzer eingeloggt ist
 if (!isset($_SESSION['user_id'])) {
@@ -8,6 +8,7 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// Initialisierung der Variablen
 $invoice = [
     'id' => '',
     'invoice_number' => '',
@@ -18,12 +19,14 @@ $invoice = [
     'vat_rate' => 19.00,
     'vat_amount' => 0.00,
     'total_amount' => 0.00,
-    'status' => 'draft'
+    'status' => 'draft',
+    'notes' => ''
 ];
 
 $invoice_items = [];
 $errors = [];
 $success_message = '';
+$is_new = true;
 
 // Alle Artikel für das Dropdown-Menü laden
 $stmt = $pdo->query("SELECT * FROM articles ORDER BY description ASC");
@@ -41,24 +44,35 @@ if (isset($_GET['id'])) {
     
     if ($loadedInvoice) {
         $invoice = $loadedInvoice;
+        $is_new = false;
         
         // Lade die Rechnungspositionen
         $stmt = $pdo->prepare("SELECT * FROM invoice_items WHERE invoice_id = ?");
         $stmt->execute([$_GET['id']]);
         $invoice_items = $stmt->fetchAll();
+    } else {
+        $errors[] = 'Die angegebene Rechnung wurde nicht gefunden.';
     }
 }
 
 // Formularverarbeitung
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Daten aus dem Formular übernehmen
+    $invoice['customer_id'] = $_POST['customer_id'] ?? '';
+    $invoice['invoice_date'] = $_POST['invoice_date'] ?? '';
+    $invoice['due_date'] = $_POST['due_date'] ?? '';
+    $invoice['vat_rate'] = $_POST['vat_rate'] ?? 19.00;
+    $invoice['notes'] = $_POST['notes'] ?? '';
+    $invoice['status'] = $_POST['status'] ?? 'draft';
+
     // Validierung
-    if (empty($_POST['customer_id'])) {
+    if (empty($invoice['customer_id'])) {
         $errors[] = 'Bitte wählen Sie einen Kunden aus.';
     }
-    if (empty($_POST['invoice_date'])) {
+    if (empty($invoice['invoice_date'])) {
         $errors[] = 'Bitte geben Sie ein Rechnungsdatum an.';
     }
-    if (empty($_POST['due_date'])) {
+    if (empty($invoice['due_date'])) {
         $errors[] = 'Bitte geben Sie ein Fälligkeitsdatum an.';
     }
 
@@ -67,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
-            if (empty($invoice['id'])) {
+            if ($is_new) {
                 // Neue Rechnungsnummer generieren (Format: RE + Jahr + Monat + 4-stellige laufende Nummer)
                 $year = date('Y');
                 $month = date('m');
@@ -81,22 +95,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Neue Rechnung erstellen
                 $stmt = $pdo->prepare("
                     INSERT INTO invoices 
-                    (invoice_number, customer_id, invoice_date, due_date, subtotal, vat_rate, vat_amount, total_amount, status) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (invoice_number, customer_id, invoice_date, due_date, subtotal, vat_rate, vat_amount, total_amount, status, notes, created_at, created_by) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)
                 ");
                 $stmt->execute([
                     $invoice_number,
-                    $_POST['customer_id'],
-                    $_POST['invoice_date'],
-                    $_POST['due_date'],
+                    $invoice['customer_id'],
+                    $invoice['invoice_date'],
+                    $invoice['due_date'],
                     0.00, // subtotal wird später berechnet
-                    $_POST['vat_rate'],
+                    $invoice['vat_rate'],
                     0.00, // vat_amount wird später berechnet
                     0.00, // total_amount wird später berechnet
-                    'draft'
+                    $invoice['status'],
+                    $invoice['notes'],
+                    $_SESSION['user_id']
                 ]);
 
                 $invoice_id = $pdo->lastInsertId();
+                $success_message = 'Die Rechnung wurde erfolgreich erstellt.';
             } else {
                 // Bestehende Rechnung aktualisieren
                 $stmt = $pdo->prepare("
@@ -104,20 +121,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     SET customer_id = ?, 
                         invoice_date = ?, 
                         due_date = ?,
-                        vat_rate = ?
+                        vat_rate = ?,
+                        status = ?,
+                        notes = ?,
+                        updated_at = NOW(),
+                        updated_by = ?
                     WHERE id = ?
                 ");
                 $stmt->execute([
-                    $_POST['customer_id'],
-                    $_POST['invoice_date'],
-                    $_POST['due_date'],
-                    $_POST['vat_rate'],
+                    $invoice['customer_id'],
+                    $invoice['invoice_date'],
+                    $invoice['due_date'],
+                    $invoice['vat_rate'],
+                    $invoice['status'],
+                    $invoice['notes'],
+                    $_SESSION['user_id'],
                     $invoice['id']
                 ]);
                 $invoice_id = $invoice['id'];
+                $success_message = 'Die Rechnung wurde erfolgreich aktualisiert.';
             }
 
             $pdo->commit();
+            
+            // Erfolgsmeldung in der Session speichern
+            $_SESSION['success_message'] = $success_message;
             
             // Weiterleitung zur Bearbeitung der Rechnungspositionen
             header("Location: invoice_items.php?id=" . $invoice_id);
@@ -129,6 +157,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+// Automatische Berechnung bei bestehenden Rechnungspositionen
+if (!empty($invoice_items)) {
+    $subtotal = 0;
+    foreach ($invoice_items as $item) {
+        $subtotal += $item['quantity'] * $item['price'];
+    }
+    $vat_amount = $subtotal * ($invoice['vat_rate'] / 100);
+    $total_amount = $subtotal + $vat_amount;
+    
+    // Update der Rechnung mit den berechneten Beträgen
+    if (!$is_new) {
+        try {
+            $stmt = $pdo->prepare("
+                UPDATE invoices 
+                SET subtotal = ?, vat_amount = ?, total_amount = ? 
+                WHERE id = ?
+            ");
+            $stmt->execute([$subtotal, $vat_amount, $total_amount, $invoice['id']]);
+            
+            // Aktualisierte Werte anzeigen
+            $invoice['subtotal'] = $subtotal;
+            $invoice['vat_amount'] = $vat_amount;
+            $invoice['total_amount'] = $total_amount;
+        } catch (PDOException $e) {
+            $errors[] = 'Fehler bei der Betragsberechnung: ' . $e->getMessage();
+        }
+    }
+}
 ?>
 
 <div class="container-fluid mt-4">
@@ -137,10 +194,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h1>
                     <i class="bi bi-file-text"></i>
-                    <?php echo empty($invoice['id']) ? 'Neue Rechnung' : 'Rechnung bearbeiten'; ?>
+                    <?php echo $is_new ? 'Neue Rechnung erstellen' : 'Rechnung bearbeiten'; ?>
                 </h1>
                 <a href="invoices.php" class="btn btn-secondary">
-                    <i class="bi bi-arrow-left"></i> Zurück
+                    <i class="bi bi-arrow-left"></i> Zurück zur Übersicht
                 </a>
             </div>
 
@@ -160,9 +217,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
 
-            <div class="card">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">Rechnungsdaten</h5>
+                </div>
                 <div class="card-body">
-                    <form method="POST">
+                    <form method="POST" id="invoiceForm">
                         <input type="hidden" name="id" value="<?php echo htmlspecialchars($invoice['id']); ?>">
                         
                         <div class="row mb-3">
@@ -170,10 +230,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <label for="invoice_number" class="form-label">Rechnungsnummer</label>
                                 <input type="text" class="form-control" id="invoice_number" name="invoice_number"
                                        value="<?php echo htmlspecialchars($invoice['invoice_number']); ?>" readonly>
+                                <small class="text-muted">Wird automatisch generiert</small>
                             </div>
                             <div class="col-md-6">
                                 <label for="customer_id" class="form-label">Kunde *</label>
-                                <select class="form-control" id="customer_id" name="customer_id" required>
+                                <select class="form-select" id="customer_id" name="customer_id" required>
                                     <option value="">Bitte wählen...</option>
                                     <?php foreach ($customers as $customer): ?>
                                         <?php 
@@ -211,23 +272,133 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                             <div class="col-md-6">
                                 <label for="status" class="form-label">Status</label>
-                                <input type="text" class="form-control" id="status" 
-                                       value="<?php echo htmlspecialchars($invoice['status']); ?>" readonly>
+                                <select class="form-select" id="status" name="status">
+                                    <option value="draft" <?php echo $invoice['status'] === 'draft' ? 'selected' : ''; ?>>Entwurf</option>
+                                    <option value="sent" <?php echo $invoice['status'] === 'sent' ? 'selected' : ''; ?>>Versendet</option>
+                                    <option value="paid" <?php echo $invoice['status'] === 'paid' ? 'selected' : ''; ?>>Bezahlt</option>
+                                    <option value="overdue" <?php echo $invoice['status'] === 'overdue' ? 'selected' : ''; ?>>Überfällig</option>
+                                    <option value="cancelled" <?php echo $invoice['status'] === 'cancelled' ? 'selected' : ''; ?>>Storniert</option>
+                                </select>
                             </div>
                         </div>
 
-                        <div class="row">
+                        <div class="row mb-3">
                             <div class="col-12">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-save"></i> Weiter zu Rechnungspositionen
+                                <label for="notes" class="form-label">Anmerkungen</label>
+                                <textarea class="form-control" id="notes" name="notes" rows="3"><?php echo htmlspecialchars($invoice['notes']); ?></textarea>
+                            </div>
+                        </div>
+
+                        <?php if (!$is_new): ?>
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Nettobetrag</h6>
+                                        <p class="card-text h5"><?php echo number_format($invoice['subtotal'], 2, ',', '.'); ?> €</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">MwSt. (<?php echo number_format($invoice['vat_rate'], 1); ?>%)</h6>
+                                        <p class="card-text h5"><?php echo number_format($invoice['vat_amount'], 2, ',', '.'); ?> €</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-success text-white">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Gesamtbetrag</h6>
+                                        <p class="card-text h4"><?php echo number_format($invoice['total_amount'], 2, ',', '.'); ?> €</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="invoices.php" class="btn btn-light border">
+                                <i class="bi bi-arrow-left"></i> Abbrechen
+                            </a>
+                            <div>
+                                <button type="submit" class="btn btn-success btn-lg">
+                                    <i class="bi bi-save"></i> Rechnung speichern
                                 </button>
+                                <?php if (!$is_new): ?>
+                                <a href="invoice_items.php?id=<?php echo $invoice['id']; ?>" class="btn btn-primary btn-lg ms-2">
+                                    <i class="bi bi-list-ul"></i> Rechnungspositionen bearbeiten
+                                </a>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </form>
                 </div>
             </div>
+
+            <?php if (!$is_new): ?>
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Rechnungspositionen</h5>
+                    <a href="invoice_items.php?id=<?php echo $invoice['id']; ?>" class="btn btn-sm btn-primary">
+                        <i class="bi bi-pencil"></i> Positionen bearbeiten
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Pos.</th>
+                                    <th>Artikel</th>
+                                    <th>Beschreibung</th>
+                                    <th class="text-end">Menge</th>
+                                    <th class="text-end">Preis (€)</th>
+                                    <th class="text-end">Summe (€)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($invoice_items)): ?>
+                                <tr>
+                                    <td colspan="6" class="text-center">Keine Rechnungspositionen vorhanden.</td>
+                                </tr>
+                                <?php else: ?>
+                                    <?php foreach ($invoice_items as $index => $item): ?>
+                                    <tr>
+                                        <td><?php echo $index + 1; ?></td>
+                                        <td><?php echo htmlspecialchars($item['article_id']); ?></td>
+                                        <td><?php echo htmlspecialchars($item['description']); ?></td>
+                                        <td class="text-end"><?php echo number_format($item['quantity'], 2, ',', '.'); ?></td>
+                                        <td class="text-end"><?php echo number_format($item['price'], 2, ',', '.'); ?></td>
+                                        <td class="text-end"><?php echo number_format($item['quantity'] * $item['price'], 2, ',', '.'); ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                            <?php if (!empty($invoice_items)): ?>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="5" class="text-end">Nettobetrag:</th>
+                                    <th class="text-end"><?php echo number_format($invoice['subtotal'], 2, ',', '.'); ?> €</th>
+                                </tr>
+                                <tr>
+                                    <th colspan="5" class="text-end">MwSt. (<?php echo number_format($invoice['vat_rate'], 1); ?>%):</th>
+                                    <th class="text-end"><?php echo number_format($invoice['vat_amount'], 2, ',', '.'); ?> €</th>
+                                </tr>
+                                <tr>
+                                    <th colspan="5" class="text-end">Gesamtbetrag:</th>
+                                    <th class="text-end"><?php echo number_format($invoice['total_amount'], 2, ',', '.'); ?> €</th>
+                                </tr>
+                            </tfoot>
+                            <?php endif; ?>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
 
-<?php require_once 'footer.php'; ?>
+<?php require_once 'includes/footer.php'; ?>
